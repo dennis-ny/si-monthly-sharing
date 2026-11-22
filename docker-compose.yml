@@ -1,0 +1,61 @@
+services:
+  db:
+    image: docker.io/library/mariadb:10.11
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-workshop_root_2026}
+      MARIADB_DATABASE: workshop_meta
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:${WEB_PORT:-8000}:80"
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-workshop_root_2026}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-instruktur2026}
+      WEB_PORT: ${WEB_PORT:-8000}
+      PHPMYADMIN_PORT: ${PHPMYADMIN_PORT:-8080}
+      HOST_LAN_IP: ${HOST_LAN_IP:-}
+    volumes:
+      - participants_data:/var/www/participants
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 5s
+
+  phpmyadmin:
+    image: docker.io/library/phpmyadmin:5
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:${PHPMYADMIN_PORT:-8080}:80"
+    environment:
+      PMA_HOST: db
+      PMA_PORT: "3306"
+      PMA_ARBITRARY: "0"
+      UPLOAD_LIMIT: 10M
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db_data:
+  participants_data:

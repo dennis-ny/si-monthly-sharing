@@ -1,0 +1,8 @@
+.env
+.env.prod
+exports/
+offline-images/
+test-results/
+node_modules/
+*.tar
+*.tar.gz

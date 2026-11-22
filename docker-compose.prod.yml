@@ -1,0 +1,69 @@
+# Production Compose untuk infrastruktur Traefik + Cloudflare Tunnel (network: proxy)
+# Jalankan dengan:
+#   cp .env.prod.example .env.prod   # lalu isi domain & password kuat
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+
+services:
+  db:
+    image: docker.io/library/mariadb:10.11
+    container_name: workshop-db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD wajib diisi di .env.prod}
+      MARIADB_DATABASE: workshop_meta
+    volumes:
+      - workshop_db_data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - workshop-net
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: workshop-web
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD wajib diisi di .env.prod}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD wajib diisi di .env.prod}
+      # Set ke "disabled" jika tidak ingin menampilkan tombol phpMyAdmin ke peserta,
+      # atau isi URL publik phpMyAdmin (misal https://pma-workshop.domainkamu.com/)
+      PMA_PUBLIC_URL: ${PMA_PUBLIC_URL:-disabled}
+    volumes:
+      - workshop_participants_data:/var/www/participants
+    networks:
+      - workshop-net
+      - proxy
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.workshop.rule=Host(`${APP_DOMAIN:?APP_DOMAIN wajib diisi di .env.prod}`)"
+      - "traefik.http.routers.workshop.entrypoints=web"
+      - "traefik.http.services.workshop.loadbalancer.server.port=80"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  workshop_db_data:
+  workshop_participants_data:
+
+networks:
+  proxy:
+    external: true
+  workshop-net:
+    name: workshop_net
