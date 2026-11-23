@@ -34,9 +34,7 @@ services:
       DB_PORT: "3306"
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD wajib diisi di .env}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD wajib diisi di .env}
-      # Set ke "disabled" jika tidak ingin menampilkan tombol phpMyAdmin ke peserta,
-      # atau isi URL publik phpMyAdmin (misal https://pma-workshop.domainkamu.com/)
-      PMA_PUBLIC_URL: ${PMA_PUBLIC_URL:-disabled}
+      PMA_PUBLIC_URL: https://${PMA_DOMAIN:?PMA_DOMAIN wajib diisi di .env}/
     volumes:
       - workshop_participants_data:/var/www/participants
     networks:
@@ -57,6 +55,29 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+
+  phpmyadmin:
+    image: docker.io/library/phpmyadmin:5
+    container_name: workshop-pma
+    restart: unless-stopped
+    environment:
+      PMA_HOST: db
+      PMA_PORT: "3306"
+      PMA_ARBITRARY: "0"
+      PMA_ABSOLUTE_URI: https://${PMA_DOMAIN:?PMA_DOMAIN wajib diisi di .env}/
+      UPLOAD_LIMIT: 10M
+    networks:
+      - workshop-net
+      - proxy
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.workshop-pma.rule=Host(`${PMA_DOMAIN:?PMA_DOMAIN wajib diisi di .env}`)"
+      - "traefik.http.routers.workshop-pma.entrypoints=web"
+      - "traefik.http.services.workshop-pma.loadbalancer.server.port=80"
 
 volumes:
   workshop_db_data:
