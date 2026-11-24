@@ -177,6 +177,10 @@ if (str_starts_with($rawUri, $prefix)) {
     $_SERVER['REQUEST_URI'] = ($subUri === '' || $subUri[0] === '?') ? ('/' . $subUri) : $subUri;
 }
 $isHttps = is_https_request();
+if ($isHttps) {
+    $_SERVER['HTTPS'] = 'on';
+    $_SERVER['SERVER_PORT'] = 443;
+}
 $scheme = $isHttps ? 'https' : 'http';
 $httpHost = $_SERVER['HTTP_HOST'] ?? 'localhost';
 $rootUrl = $scheme . '://' . $httpHost . $prefix;
